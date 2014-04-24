@@ -11,3 +11,7 @@
 /*.userprefs
 /*.pidb
 /*.booproj
+*.csproj
+*.unityproj
+/ShootyTopDown/bin
+*.sln
