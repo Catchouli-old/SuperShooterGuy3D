@@ -29,12 +29,12 @@ public class Turret
 			break;
 		case Dumbness.NOTVERY:
 			
-			targetDir = Projectile.InterceptVector(transform.position, target.transform.position, target.rigidbody.velocity, BULLET_SPEED).normalized;
+			//targetDir = Projectile.InterceptVector(transform.position, target.transform.position, target.rigidbody.velocity, BULLET_SPEED).normalized;
 
 			break;
 		}
 		
 		TurnTowards(targetDir);
-		Fire();
+		//Fire();
 	}
 }

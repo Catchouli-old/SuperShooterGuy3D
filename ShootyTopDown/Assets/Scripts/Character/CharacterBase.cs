@@ -23,8 +23,8 @@ public class CharacterBase
 	public static float MaxHealth { get { return 100; } }
 	public float Health { get; set; }
 	
-	public WeaponType CurrentWeapon { get { return currentWeapon; } }
-	public int CurrentAmmo { get { return currentAmmo; } }
+	public WeaponType CurrentWeapon { get { return currentWeapon; } set { currentWeapon = value; } }
+	public int CurrentAmmo { get { return currentAmmo; } set { currentAmmo = value; } }
 
 	public Vector2 FacingDirection { get { return facingDirectionReal; } }
 
@@ -39,7 +39,7 @@ public class CharacterBase
 
 	public const float BULLET_SPEED = 20.0f;
 
-	public const float BULLET_DELAY = 100.1f;
+	public const float BULLET_DELAY = 0.1f;
 
 	// The prefab for projectiles
 	public GameObject projectilePrefab;
@@ -65,7 +65,6 @@ public class CharacterBase
 	{
 
 	}
-	
 	
 	// Death event handler
 	// Return true to destroy object
@@ -104,6 +103,15 @@ public class CharacterBase
 
 	protected void Fire()
 	{
+		if (CurrentAmmo <= 0 && CurrentWeapon != WeaponType.PISTOL)
+		{
+			CurrentWeapon = WeaponType.PISTOL;
+		}
+		else
+		{
+			CurrentAmmo--;
+		}
+
 		if (Time.time - lastBulletTime >= BULLET_DELAY)
 		{
 			// Update bullet timer

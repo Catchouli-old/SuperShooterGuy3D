@@ -17,16 +17,32 @@ public class PowerupManager : MonoBehaviour
 	private CellGrid cellGrid;
 	private List<Cell> deadEnds;
 
+	private List<Powerup> powerups;
+
 	public void SetDeadEnds(CellGrid cellGrid, List<Cell> deadEnds)
 	{
 		this.cellGrid = cellGrid;
 		this.deadEnds = new List<Cell>(deadEnds);
+		this.powerups = new List<Powerup>();
 	}
 
 	public void SpawnPowerups()
 	{
 		// See above
 		SpawnPowerups(healthPowerupPrefab, healthPowerupCount);
+	}
+	
+	public void DespawnPowerups()
+	{
+		if (powerups != null)
+		{
+			foreach (Powerup powerup in powerups)	
+			{
+				if (powerup.gameObject != null)
+					Destroy(powerup.gameObject);
+			}
+			powerups.Clear();
+		}
 	}
 	
 	public void PowerupCollected(GameObject powerup)
@@ -62,7 +78,7 @@ public class PowerupManager : MonoBehaviour
 			if (!Physics.CheckSphere(worldPos, 0.1f, actors))
 			{
 				spawned = true;
-				GameObject.Instantiate(prefab, worldPos, Quaternion.identity);
+				powerups.Add(((GameObject)GameObject.Instantiate(prefab, worldPos, Quaternion.identity)).GetComponent<Powerup>());
 				break;
 			}
 		}
@@ -71,6 +87,7 @@ public class PowerupManager : MonoBehaviour
 		if (!spawned)
 		{
 			GameObject powerup = (GameObject)GameObject.Instantiate(prefab);
+			powerups.Add(powerup.GetComponent<Powerup>());
 			PowerupCollected(powerup);
 		}
 	}
@@ -79,8 +96,11 @@ public class PowerupManager : MonoBehaviour
 	{
 		yield return new WaitForSeconds(time);
 
-		// Spawn a new powerup and destroy the old one
-		SpawnPowerup(powerup);
-		Destroy(powerup);
+		if (powerup != null)
+		{
+			// Spawn a new powerup and destroy the old one
+			SpawnPowerup(powerup);
+			Destroy(powerup);
+		}
 	}
 }

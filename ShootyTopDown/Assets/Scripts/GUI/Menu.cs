@@ -127,7 +127,7 @@ public class Menu : MonoBehaviour
 		// Destroy stuff
 		DestroyIfNotNull(playerCharacterObj);
 		DestroyIfNotNull(playerCameraObj);
-
+		
 		// Clean up projectiles
 		foreach (Component projectile in GameObject.FindObjectsOfType(typeof(Projectile)))
 		{
@@ -189,7 +189,7 @@ public class Menu : MonoBehaviour
 					menuState = MenuState.FADETOPAUSE;
 				}
 				
-				if (playerCharacter.Health <= 0.0f)
+				if (playerCharacter.Health <= 0.0f || GameObject.FindObjectsOfType(typeof(NonplayerCharacter)).Length == 0)
 				{
 					fadeStartTime = Time.realtimeSinceStartup;
 					menuState = MenuState.FADETOPAUSE;
@@ -200,7 +200,7 @@ public class Menu : MonoBehaviour
 		case MenuState.PAUSE:
 			Time.timeScale = 0.0f;
 			
-			if (escJustPressed && !playerCharacter.Dead)
+			if (escJustPressed && !playerCharacter.Dead && GameObject.FindObjectsOfType(typeof(NonplayerCharacter)).Length > 0)
 			{
 				fadeStartTime = Time.realtimeSinceStartup;
 				menuState = MenuState.FADETOGAME;
@@ -424,10 +424,17 @@ public class Menu : MonoBehaviour
 		                             width,
 		                             height));
 
-		if (playerCharacter.Health > 0.0f && GUILayout.Button("Return to game"))
+		if (playerCharacter.Health > 0.0f &&
+		    GameObject.FindObjectsOfType(typeof(NonplayerCharacter)).Length > 0 &&
+		    GUILayout.Button("Return to game"))
 		{
 			fadeStartTime = Time.realtimeSinceStartup;
 			menuState = MenuState.FADETOGAME;
+		}
+
+		if (GameObject.FindObjectsOfType(typeof(NonplayerCharacter)).Length == 0)
+		{
+			GUILayout.Label("You win!");
 		}
 		
 		if (GUILayout.Button("Restart"))
@@ -489,10 +496,14 @@ public class Menu : MonoBehaviour
 			GUI.Label(new Rect(healthBarX + 5, healthBarY + 5, HEALTH_BAR_MAX_WIDTH, HEALTH_BAR_HEIGHT), ((int)playerCharacter.Health).ToString(), style);
 
 			// Draw weapon and ammo type
+			string weaponName = CharacterBase.WeaponTypeToName(playerCharacter.CurrentWeapon);
+			string ammoCount = (playerCharacter.CurrentWeapon == PlayerCharacter.WeaponType.PISTOL ?
+			                    "Infinity" : playerCharacter.CurrentAmmo.ToString());
+
 			style.fontSize = 22;
 			style.alignment = TextAnchor.LowerLeft;
-			GUILayout.Label("  Current weapon: " + CharacterBase.WeaponTypeToName(playerCharacter.CurrentWeapon) + "\n" +
-			                "  Current ammo: " + playerCharacter.CurrentAmmo.ToString() + "\n", style,
+			GUILayout.Label("  Current weapon: " + weaponName + "\n" +
+			                "  Current ammo: " + ammoCount + "\n", style,
 			                new GUILayoutOption[] { GUILayout.Width(Screen.width), GUILayout.Height(Screen.height) });
 		}
 		

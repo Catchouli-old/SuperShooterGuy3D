@@ -43,6 +43,8 @@ public class LevelGen : MonoBehaviour
 		// Clean up old generation
 		DestroyIfNotNull(mesh);
 		DestroyIfNotNull(enemies);
+
+		((PowerupManager)GameObject.FindObjectOfType(typeof(PowerupManager))).DespawnPowerups();
 	}
 
 	public void Regenerate()
