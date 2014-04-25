@@ -1,4 +1,7 @@
 ﻿#define NPC_DEBUG
+//#define DEBUG_FOV_RAYCASTS
+//#define DEBUG_PLAYER_RAYCASTS
+//#define DEBUG_COVER_RAYCASTS
 
 using UnityEngine;
 using System.Collections.Generic;
@@ -18,15 +21,15 @@ public class NonplayerCharacter
 	
 	private const float DEFAULT_MOVE_SPEED = 0.5f;
 
-	private const float COVER_HEALTH = 50;
+	private const float COVER_HEALTH = 51;
 
 	public static CellState[,] CellStates { get { return cellStates; } }
 	public static GridCell[,] PathFindingGrid { get { return pathFindingGrid; } }
 
 	private const int FOV_STEPS = 30;
 	private const float FOV = 60.0f;
-	
-	private const float INVALIDATE_PLAYER_POS_TIME = 3.0f;
+
+	private const float LOOK_PLAYER_JITTER = 15;
 	
 	public GameObject target;
 	
@@ -51,6 +54,7 @@ public class NonplayerCharacter
 	private State previousState = State.MAP_LEVEL;
 	private bool stateJustChanged = true;
 
+	private Vector3 movementDir = Vector3.zero;
 	private float targetMovementSpeed = DEFAULT_MOVE_SPEED;
 	
 	private Vector3 lastPlayerPos;
@@ -97,7 +101,7 @@ public class NonplayerCharacter
 			pathFindingGrid[x, y] = new GridCell(x, y, false);
 		}
 		
-		cellGrid = new CellGrid(pathFindingGrid, LevelGen.Instance.transform);
+		cellGrid = new CellGrid(pathFindingGrid, LevelGen.Instance.transform, 1);
 		
 		currentTargets.Clear();
 	}
@@ -148,7 +152,7 @@ public class NonplayerCharacter
 	
 	protected override void Update()
 	{
-		Debug.Log("Current state: " + currentState);
+		//Debug.Log("Current state: " + currentState);
 
 		lineVertices = 0;
 
@@ -246,8 +250,8 @@ public class NonplayerCharacter
 					{
 						// Move towards next node in path
 						Vector3 dir = (nextNode.Position - currentNode.Position).normalized;
-						
-						TurnTowards(dir);
+
+						movementDir = dir;
 						Move(dir * targetMovementSpeed);
 					}
 				}
@@ -261,6 +265,9 @@ public class NonplayerCharacter
 	// State handlers
 	protected bool MapLevel()
 	{
+		// Turn towards movemment direction
+		TurnTowards(movementDir);
+
 		// Check if we can see the player and switch to chase player if so
 		if (CanSeePlayer(FacingDirection))
 		{
@@ -335,6 +342,9 @@ public class NonplayerCharacter
 	
 	protected bool PatrolLevel()
 	{
+		// Turn towards movemment direction
+		TurnTowards(movementDir);
+
 		// Check if we can see the player and switch to chase player if so
 		if (CanSeePlayer(FacingDirection))
 		{
@@ -398,7 +408,8 @@ public class NonplayerCharacter
 
 		// Turn towards new player position
 		// Calculate intercept vector
-		dir = (playerPos - transform.position).normalized;
+		dir = Quaternion.AngleAxis(Random.Range(-0.5f, 0.5f) * LOOK_PLAYER_JITTER, Vector3.forward) *
+		                           (playerPos - transform.position).normalized;
 		
 		// Turn towards the estimated target location and fire
 		TurnTowards(dir);
@@ -427,7 +438,8 @@ public class NonplayerCharacter
 		// If we can't see the player, go to their last known pos
 		if (CanSeePlayer(dir))
 		{
-			dir = (playerPos - transform.position).normalized;
+			dir = Quaternion.AngleAxis(Random.Range(-0.5f, 0.5f) * LOOK_PLAYER_JITTER, Vector3.forward) *
+				(playerPos - transform.position).normalized;
 			
 			TurnTowards(dir);
 			Fire();
@@ -519,6 +531,10 @@ public class NonplayerCharacter
 			else
 				facingDirectionTarget = Quaternion.AngleAxis(-10.0f, Vector3.forward) * facingDirectionTarget;
 		}
+		else
+		{
+			TurnTowards(movementDir);
+		}
 
 		return true;
 	}
@@ -533,12 +549,12 @@ public class NonplayerCharacter
 		{
 			Vector3 direction = Vector3.Lerp(startDir, endDir, (float)i * (1.0f / FOV_STEPS)).normalized;
 			
-			#if NPC_DEBUG
-			//lineRenderer.SetVertexCount(i*3+3);
-			//lineRenderer.SetPosition(i*3 + 0, transform.position);
-			//lineRenderer.SetPosition(i*3 + 1, transform.position + direction * 1000.0f);
-			//lineRenderer.SetPosition(i*3 + 2, transform.position);
-			#endif
+#if NPC_DEBUG && DEBUG_PLAYER_RAYCASTS
+			lineRenderer.SetVertexCount(i*3+3);
+			lineRenderer.SetPosition(i*3 + 0, transform.position);
+			lineRenderer.SetPosition(i*3 + 1, transform.position + direction * 1000.0f);
+			lineRenderer.SetPosition(i*3 + 2, transform.position);
+#endif
 			
 			Ray ray = new Ray(transform.position, direction);
 			
@@ -596,12 +612,12 @@ public class NonplayerCharacter
 			Vector3 direction = Vector3.Lerp(startDir, endDir, (float)i * (1.0f / FOV_STEPS)).normalized;
 			Ray ray = new Ray(transform.position, direction);
 			
-			#if NPC_DEBUG
-			//lineRenderer.SetVertexCount(i*3+3);
-			//lineRenderer.SetPosition(i*3 + 0, transform.position);
-			//lineRenderer.SetPosition(i*3 + 1, transform.position + direction * 1000.0f);
-			//lineRenderer.SetPosition(i*3 + 2, transform.position);
-			#endif
+#if NPC_DEBUG && DEBUG_FOV_RAYCASTS
+			lineRenderer.SetVertexCount(i*3+3);
+			lineRenderer.SetPosition(i*3 + 0, transform.position);
+			lineRenderer.SetPosition(i*3 + 1, transform.position + direction * 1000.0f);
+			lineRenderer.SetPosition(i*3 + 2, transform.position);
+#endif
 			
 			RaycastHit hitInfo;
 			if (Physics.Raycast(ray, out hitInfo, 1000.0f, levelLayer))
@@ -827,7 +843,7 @@ public class NonplayerCharacter
 				float dist = diff.magnitude;
 				Vector3 dir = diff / dist;
 
-#if NPC_DEBUG
+#if NPC_DEBUG && DEBUG_COVER_RAYCASTS
 				lineVertices += 3;
 				lineRenderer.SetVertexCount(lineVertices);
 				

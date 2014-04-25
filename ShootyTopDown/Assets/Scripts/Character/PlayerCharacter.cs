@@ -4,6 +4,9 @@ using System.Collections;
 public class PlayerCharacter
 	: CharacterBase
 {
+	private bool fireHeld = false;
+	private bool fireHeldPrev = false;
+
 	// Don't destroy on death
 	public override bool Die()
 	{
@@ -22,7 +25,9 @@ public class PlayerCharacter
 		float vert = Input.GetAxis("Vertical");
 
 		// Get fire button
-		bool fire = Input.GetButton("Fire1");
+		fireHeld = Input.GetButton("Fire1");
+
+		bool fire = fireHeld && !fireHeldPrev;
 
 		// Get direction to mouse cursor
 		Vector3 playerPos = transform.position;
@@ -42,7 +47,11 @@ public class PlayerCharacter
 		TurnTowards(mouseDir);
 
 		// Fire
-		if (fire)
+		if ((fire && CurrentWeapon != WeaponType.AUTOMATIC) ||
+		    (fireHeld && CurrentWeapon == WeaponType.AUTOMATIC))
 			Fire();
+
+		// Update old button states
+		fireHeldPrev = fireHeld;
 	}
 }

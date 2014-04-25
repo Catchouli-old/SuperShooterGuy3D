@@ -1,77 +1,68 @@
 ﻿using UnityEngine;
 using System.Collections;
 
+[RequireComponent (typeof(LineRenderer))]
 public class Projectile : MonoBehaviour
 {
 	private const float DESTRUCTION_TIME = 5.0f;
 
+	private const float FADE_TIME = 0.4f;
+
 	public GameObject shooter;
 	public float damage = 10.0f;
+	public Vector3 direction;
 
-	private Vector3 lastPos;
+	public LayerMask layersToHit;
+
+	private Vector3 startPos;
+	private LineRenderer lineRenderer;
+
+	private float creationTime;
+
+	private float distance = 1000.0f;
 
 	// Store initial position
 	protected void Start()
 	{
-		lastPos = transform.position;
+		startPos = transform.position;
+		lineRenderer = GetComponent<LineRenderer>();
+		creationTime = Time.time;
 
-		GetComponent<DestroyAfter>().time = DESTRUCTION_TIME;
-	}
-	
-	// Handle collisions with characters
-	protected virtual void OnCollisionEnter(Collision collision)
-	{
-		if (enabled)
+		// Raycast to get distance to hit
+		RaycastHit hitInfo;
+		if (Physics.Raycast(transform.position, direction, out hitInfo, 1000.0f, layersToHit))
 		{
-			CharacterBase character = collision.collider.GetComponent<CharacterBase>();
+			distance = hitInfo.distance;
 
+			CharacterBase character = hitInfo.collider.gameObject.GetComponent<CharacterBase>();
+
+			// If this is a character
 			if (character != null)
 			{
+				// Do damage
 				character.Health -= damage;
 				character.DamageTaken();
-
-				if (character.Health <= 0.0f)
-				{
-					character.Dead = true;
-
-					// Call character death handler and destroy the game object if it isn't overriden to return false
-					if (character.Die())
-						Destroy(character.gameObject);
-				}
-
-				GameObject.Destroy(gameObject);
 			}
 		}
-
-		enabled = false;
 	}
-	
-	public static Vector3 InterceptVector(Vector2 pos, Vector2 targetPos, Vector2 targetVel, float projectileSpeed)
+
+	protected void Update()
 	{
-		// Find the difference between target and shooter pos
-		Vector2 diff = targetPos - pos;
-		
-		// Find the direction to the target
-		Vector2 dir = (targetPos - pos).normalized;
-		
-		// Project target velocity onto dir
-		float vDotDir = Vector2.Dot(dir, targetVel);
-		Vector2 uj = vDotDir * dir;
-		
-		// Subtract uj from u to get ui
-		Vector2 ui = targetVel - uj;
-		
-		Vector2 vi = ui;
-		
-		float vmagsqr = targetVel.sqrMagnitude;
-		float vimagsqr = vi.sqrMagnitude;
-		
-		float vjmag = Mathf.Sqrt(vmagsqr - vimagsqr);
-		
-		Vector2 vj = dir * vjmag;
-		
-		Vector2 v = vj + vi;
-		
-		return v;
+		// Update line renderer
+		lineRenderer.SetPosition(0, transform.position);
+		lineRenderer.SetPosition(1, transform.position + distance * direction);
+
+		// Calculate time since spawn
+		float dt = Time.time - creationTime;
+		float coef = dt / FADE_TIME;
+
+		// Fade based on time since spawn
+		Color col = lineRenderer.material.color;
+		col.a = Mathf.Lerp(1.0f, 0.0f, coef);
+		lineRenderer.material.color = col;
+
+		// Destroy if this is done fading out
+		if (coef >= 1.0f)
+			Destroy(gameObject);
 	}
 }

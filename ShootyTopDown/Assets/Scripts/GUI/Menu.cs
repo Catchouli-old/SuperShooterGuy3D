@@ -491,9 +491,37 @@ public class Menu : MonoBehaviour
 			                         healthBarY,
 			                         healthBarWidth,
 			                         HEALTH_BAR_HEIGHT), healthBarFront);
-
+			
+			// Draw health text
 			GUIStyle style = new GUIStyle();
-			GUI.Label(new Rect(healthBarX + 5, healthBarY + 5, HEALTH_BAR_MAX_WIDTH, HEALTH_BAR_HEIGHT), ((int)playerCharacter.Health).ToString(), style);
+			GUI.Label(new Rect(healthBarX + 5, healthBarY + 5, HEALTH_BAR_MAX_WIDTH,
+			                   HEALTH_BAR_HEIGHT), ((int)playerCharacter.Health).ToString(), style);
+			// Draw healthbar
+			const float COOLDOWN_BAR_BORDER_WIDTH = 1.0f;
+			
+			const float COOLDOWN_BAR_HEIGHT = 25;
+			const float COOLDOWN_BAR_MAX_WIDTH = 100;
+			
+			float cooldownBarX = Screen.width / 2 - HEALTH_BAR_MAX_WIDTH / 2;
+			float cooldownBarY = 50;
+
+			Debug.Log(playerCharacter.Cooldown);
+			
+			float cooldownBarCoeff = playerCharacter.Cooldown;
+			float cooldownBarWidth = COOLDOWN_BAR_MAX_WIDTH * cooldownBarCoeff;
+			
+			GUI.DrawTexture(new Rect(cooldownBarX-COOLDOWN_BAR_BORDER_WIDTH,
+			                         cooldownBarY-COOLDOWN_BAR_BORDER_WIDTH,
+			                         cooldownBarCoeff+COOLDOWN_BAR_BORDER_WIDTH*2,
+			                         COOLDOWN_BAR_HEIGHT+COOLDOWN_BAR_BORDER_WIDTH*2), healthBarBorder);
+			GUI.DrawTexture(new Rect(cooldownBarX,
+			                         cooldownBarY,
+			                         COOLDOWN_BAR_MAX_WIDTH,
+			                         HEALTH_BAR_HEIGHT), healthBarBack);
+			GUI.DrawTexture(new Rect(cooldownBarX,
+			                         cooldownBarY,
+			                         cooldownBarWidth,
+			                         HEALTH_BAR_HEIGHT), healthBarFront);
 
 			// Draw weapon and ammo type
 			string weaponName = CharacterBase.WeaponTypeToName(playerCharacter.CurrentWeapon);

@@ -12,17 +12,22 @@ public class PowerupManager : MonoBehaviour
 	public GameObject healthPowerupPrefab;
 	public int healthPowerupCount = 5;
 
+	public GameObject automaticWeaponPrefab;
+	public GameObject shotgunWeaponPrefab;
+	public GameObject railgunWeaponPrefab;
+	public int weaponCount = 1;
+
 	public LayerMask actors;
 
 	private CellGrid cellGrid;
-	private List<Cell> deadEnds;
+	private List<Cell> openSpaces;
 
 	private List<Powerup> powerups;
 
-	public void SetDeadEnds(CellGrid cellGrid, List<Cell> deadEnds)
+	public void SetOpenSpaces(CellGrid cellGrid, List<Cell> openSpaces)
 	{
 		this.cellGrid = cellGrid;
-		this.deadEnds = new List<Cell>(deadEnds);
+		this.openSpaces = new List<Cell>(openSpaces);
 		this.powerups = new List<Powerup>();
 	}
 
@@ -30,6 +35,9 @@ public class PowerupManager : MonoBehaviour
 	{
 		// See above
 		SpawnPowerups(healthPowerupPrefab, healthPowerupCount);
+		SpawnPowerups(automaticWeaponPrefab, weaponCount);
+		SpawnPowerups(shotgunWeaponPrefab, weaponCount);
+		SpawnPowerups(railgunWeaponPrefab, weaponCount);
 	}
 	
 	public void DespawnPowerups()
@@ -38,7 +46,7 @@ public class PowerupManager : MonoBehaviour
 		{
 			foreach (Powerup powerup in powerups)	
 			{
-				if (powerup.gameObject != null)
+				if (powerup != null && powerup.gameObject != null)
 					Destroy(powerup.gameObject);
 			}
 			powerups.Clear();
@@ -47,6 +55,8 @@ public class PowerupManager : MonoBehaviour
 	
 	public void PowerupCollected(GameObject powerup)
 	{
+		powerups.Remove(powerup.GetComponent<Powerup>());
+
 		// Deactivate it
 		powerup.SetActive(false);
 		
@@ -71,7 +81,7 @@ public class PowerupManager : MonoBehaviour
 		bool spawned = false;
 		for (int i = 0; i < MAX_ITERATIONS; ++i)
 		{
-			Cell cell = deadEnds[UnityEngine.Random.Range(0, deadEnds.Count)];
+			Cell cell = openSpaces[UnityEngine.Random.Range(0, openSpaces.Count)];
 			Vector3 worldPos = cellGrid.GetCellPos(new GridCell(cell.position.x, cell.position.y));
 			worldPos.z = 0;
 
