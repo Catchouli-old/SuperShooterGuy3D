@@ -30,6 +30,8 @@ public class CharacterBase
 
 	public float Cooldown { get { return cooldown; } }
 
+	public WeaponType initialWeapon = WeaponType.PISTOL;
+
 	public const float MOVEMENT_FORCE = 70.0f;
 	public const float MOVEMENT_TERMINAL_VELOCITY = 10.0f;
 
@@ -43,7 +45,7 @@ public class CharacterBase
 
 	public const float BULLET_DELAY = 0.1f;
 	
-	private const float PISTOL_DELAY = 0.35f;
+	private const float PISTOL_DELAY = 0.1f;
 	private const float PISTOL_DAMAGE = 10.0f;
 	private const float PISTOL_JITTER = 1.0f;
 
@@ -51,15 +53,18 @@ public class CharacterBase
 	private const float AUTOMATIC_DAMAGE = 10.0f;
 	private const float AUTOMATIC_JITTER = 5.0f;
 	
-	private const float SHOTGUN_DELAY = 1.0f;
+	private const float SHOTGUN_DELAY = 0.25f;
 	private const float SHOTGUN_DAMAGE = 10.0f;
 	private const float SHOTGUN_JITTER = 9.0f;
 	
 	private const int SHOTGUN_FRAGMENTS_MIN = 5;
 	private const int SHOTGUN_FRAGMENTS_MAX = 10;
+
+	private const float RECOVERY_RATE = 3.0f;
+	private const float RECOVERY_AFTER_HURT_TIME = 3.0f;
 	
-	private const float RAILGUN_DELAY = 1.5f;
-	private const float RAILGUN_DAMAGE = 100.0f;
+	private const float RAILGUN_DELAY = 0.5f;
+	private const float RAILGUN_DAMAGE = 30.0f;
 	private const float RAILGUN_JITTER = 0.1f;
 
 	// The prefab for projectiles
@@ -81,11 +86,13 @@ public class CharacterBase
 
 	// Turning mode
 	private TurningMode turningMode = TURN_MODE;
+
+	private float lastHitTime = -1000.0f;
 	
 	// Damage taken event handler
 	public virtual void DamageTaken()
 	{
-
+		lastHitTime = Time.time;
 	}
 	
 	// Death event handler
@@ -95,18 +102,35 @@ public class CharacterBase
 		return true;
 	}
 
+	// Weapon switched event handler
+	public virtual void SwitchedWeapon()
+	{
+
+	}
+
+	// Called by weapon pickup
 	public void SwitchWeapon(WeaponType newWeapon, int ammo)
 	{
-		lastBulletTime = 0;
-		cooldown = 1;
-		CurrentWeapon = newWeapon;
-		CurrentAmmo = ammo;
+		if (newWeapon == CurrentWeapon)
+		{
+			CurrentAmmo += ammo;
+		}
+		else
+		{
+			lastBulletTime = 0;
+			cooldown = 1;
+			CurrentWeapon = newWeapon;
+			CurrentAmmo = ammo;
+
+			SwitchedWeapon();
+		}
 	}
 
 	protected virtual void Start()
 	{
 		Health = MaxHealth;
 		lastBulletTime = Time.time;
+		CurrentWeapon = initialWeapon;
 	}
 
 	protected void Move(Vector2 input)
@@ -131,9 +155,10 @@ public class CharacterBase
 		facingDirectionTarget = direction;
 	}
 
-	protected void Fire()
+	protected virtual void Fire()
 	{
-		Debug.Log(WeaponTypeToName(CurrentWeapon) + " ammo: " + CurrentAmmo.ToString());
+		if (Time.timeScale == 0)
+			return;
 
 		switch (CurrentWeapon)
 		{
@@ -208,7 +233,8 @@ public class CharacterBase
 			lastBulletTime = Time.time;
 			
 			// Fire bullet
-			FireBullet(facingDirectionReal, RAILGUN_DAMAGE, RAILGUN_JITTER);
+			for (int i = 0; i < 10; ++i)
+				FireBullet(facingDirectionReal, RAILGUN_DAMAGE * 0.1f, RAILGUN_JITTER);
 		}
 	}
 
@@ -224,7 +250,10 @@ public class CharacterBase
 			Quaternion.AngleAxis(Random.Range(-jitter, jitter), Vector3.forward) * direction;
 		
 		// Place projectile on edge of character
-		projectile.transform.position = transform.position + (Vector3)facingDirectionTarget * transform.localScale.x * 0.5f;
+		// Set it into the character a tiny bit so that it doesn't go through walls
+		// due to physics penetration
+		Vector3 offset = (0.5f - 0.15f) * (Vector3)facingDirectionTarget * transform.localScale.x;
+		projectile.transform.position = transform.position;// + offset;
 	}
 
 	// Rotate to facing direction
@@ -245,6 +274,11 @@ public class CharacterBase
 
 			enabled = false;
 			return;
+		}
+
+		if (Time.time - lastHitTime >= RECOVERY_AFTER_HURT_TIME)
+		{
+			Health += Time.deltaTime * RECOVERY_RATE;
 		}
 
 		switch (turningMode)

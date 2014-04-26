@@ -1,4 +1,4 @@
-﻿//#define NPC_DEBUG
+﻿#define NPC_DEBUG
 
 using UnityEngine;
 using System.Collections;
@@ -25,10 +25,10 @@ public class Menu : MonoBehaviour
 	private const float ROUND_START_DELAY = 4.0f;
 
 	private const int MIN_MAZE_SIZE = 9;
-	private const int MAX_MAZE_SIZE = 71;
+	private const int MAX_MAZE_SIZE = 25;
 
-	private const int MIN_ENEMY_COUNT = 0;
-	private const int MAX_ENEMY_COUNT = 50;
+	private const int MIN_ENEMY_COUNT = 1;
+	private const int MAX_ENEMY_COUNT = 10;
 
 	public MenuState menuState = MenuState.TITLE;
 
@@ -89,14 +89,6 @@ public class Menu : MonoBehaviour
 
 		// Set round start timer
 		roundStartTime = Time.realtimeSinceStartup;
-
-		// Create debug textures for npc maps
-#if NPC_DEBUG
-		tex = new Texture2D(maze.width, maze.height);
-		tex.filterMode = FilterMode.Point;
-		tex2 = new Texture2D(maze.width, maze.height);
-		tex2.filterMode = FilterMode.Point;
-#endif
 		
 		// Create player character
 		playerCharacterObj = (GameObject)GameObject.Instantiate(playerCharacterPrefab);
@@ -108,6 +100,16 @@ public class Menu : MonoBehaviour
 
 		// Generate level
 		levelGen.Regenerate();
+		
+		// Create debug textures for npc maps
+#if NPC_DEBUG
+		int width = NonplayerCharacter.PathFindingGrid.GetLength(0);
+		int height = NonplayerCharacter.PathFindingGrid.GetLength(1);
+		tex = new Texture2D(width, height);
+		tex.filterMode = FilterMode.Point;
+		tex2 = new Texture2D(width, height);
+		tex2.filterMode = FilterMode.Point;
+#endif
 
 		// Move player camera over player
 		Vector3 newCamPos = playerCharacterObj.transform.position;
@@ -188,7 +190,7 @@ public class Menu : MonoBehaviour
 					fadeStartTime = Time.realtimeSinceStartup;
 					menuState = MenuState.FADETOPAUSE;
 				}
-				
+
 				if (playerCharacter.Health <= 0.0f || GameObject.FindObjectsOfType(typeof(NonplayerCharacter)).Length == 0)
 				{
 					fadeStartTime = Time.realtimeSinceStartup;
@@ -235,9 +237,12 @@ public class Menu : MonoBehaviour
 #if NPC_DEBUG
 		if (tex != null)
 		{
+			int width = NonplayerCharacter.CellStates.GetLength(0);
+			int height = NonplayerCharacter.CellStates.GetLength(1);
+
 			// Update grid texture
-			for (int x = 0; x < maze.width; ++x)
-				for (int y = 0; y < maze.height; ++y)
+			for (int x = 0; x < width; ++x)
+				for (int y = 0; y < height; ++y)
 			{
 				Color colour = Color.black;
 				
@@ -262,9 +267,12 @@ public class Menu : MonoBehaviour
 
 		if (tex2 != null)
 		{
+			int width = NonplayerCharacter.PathFindingGrid.GetLength(0);
+			int height = NonplayerCharacter.PathFindingGrid.GetLength(1);
+
 			// Update pathfinding texture
-			for (int x = 0; x < maze.width; ++x)
-				for (int y = 0; y < maze.height; ++y)
+			for (int x = 0; x < width; ++x)
+				for (int y = 0; y < height; ++y)
 			{
 				Color colour = Color.black;
 				
@@ -504,8 +512,6 @@ public class Menu : MonoBehaviour
 			
 			float cooldownBarX = Screen.width / 2 - HEALTH_BAR_MAX_WIDTH / 2;
 			float cooldownBarY = 50;
-
-			Debug.Log(playerCharacter.Cooldown);
 			
 			float cooldownBarCoeff = playerCharacter.Cooldown;
 			float cooldownBarWidth = COOLDOWN_BAR_MAX_WIDTH * cooldownBarCoeff;

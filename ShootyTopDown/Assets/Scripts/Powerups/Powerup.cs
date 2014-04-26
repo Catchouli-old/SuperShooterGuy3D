@@ -3,6 +3,13 @@ using System.Collections;
 
 public class Powerup : MonoBehaviour
 {
+	PowerupManager manager;
+
+	protected void Start()
+	{
+		manager = (PowerupManager)GameObject.FindObjectOfType(typeof(PowerupManager));
+	}
+
 	protected virtual void Activate(CharacterBase character)
 	{
 
@@ -15,7 +22,7 @@ public class Powerup : MonoBehaviour
 		if (character != null)
 		{
 			Activate(character);
-			Destroy(gameObject);
+			manager.PowerupCollected(gameObject);
 		}
 	}
 }

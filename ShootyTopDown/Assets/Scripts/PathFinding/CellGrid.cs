@@ -13,17 +13,17 @@ public partial class CellGrid
 	private Vector3 scale;
 	private Vector3 invScale;
 
-	public CellGrid(GridCell[,] grid, Transform transform)
+	public CellGrid(GridCell[,] grid, Transform transform, float mazeRes)
 	{
 		this.grid = grid;
 
 		offset = transform.position;
 
 		scale = new Vector3(transform.lossyScale.x,
-		                                     transform.lossyScale.z, 1);
+		                    transform.lossyScale.z, 1);
 
-		invScale = new Vector3(1.0f / transform.lossyScale.x,
-		                               1.0f / transform.lossyScale.z, 1);
+		invScale = new Vector3(1.0f / scale.x,
+		                               1.0f / scale.y, 1);
 	}
 
 	public PathNode GetPathfindingNode(GridCell cell)
@@ -67,6 +67,7 @@ public partial class CellGrid
 	{
 		Vector3 worldPos = new Vector3((float)cell.x,
 		                               (float)cell.y);
+
 		worldPos.Scale(scale);
 		worldPos += offset;
 		
@@ -88,7 +89,7 @@ public partial class CellGrid
 		return grid[cellPos.x, cellPos.y];
 	}
 	
-	private Point GetIdxFromPos(Vector3 pos)
+	public Point GetIdxFromPos(Vector3 pos)
 	{
 		float cellSizeX = 1.0f;
 		float cellSizeY = 1.0f;

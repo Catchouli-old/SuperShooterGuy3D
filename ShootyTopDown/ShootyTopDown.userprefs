@@ -1,20 +1,33 @@
 ﻿<Properties>
   <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" PreferredExecutionTarget="MonoDevelop.Default" />
-  <MonoDevelop.Ide.Workbench ActiveDocument="Assets\Scripts\Projectile\Projectile.cs">
+  <MonoDevelop.Ide.Workbench ActiveDocument="Assets\Scripts\Character\NonplayerCharacter.cs">
     <Files>
+      <File FileName="Assets\Scripts\Powerups\PowerupManager.cs" Line="26" Column="2" />
       <File FileName="Assets\Scripts\LevelGen\Cell.cs" Line="1" Column="1" />
-      <File FileName="Assets\Scripts\GUI\Menu.cs" Line="504" Column="31" />
-      <File FileName="Assets\Scripts\Powerups\PowerupManager.cs" Line="1" Column="1" />
       <File FileName="Assets\Scripts\LevelGen\LevelGen.cs" Line="1" Column="1" />
-      <File FileName="Assets\Scripts\Character\CharacterBase.cs" Line="129" Column="120" />
-      <File FileName="Assets\Scripts\GUI\GUICompass.cs" Line="79" Column="4" />
-      <File FileName="Assets\Scripts\Powerups\Weapons\Weapon.cs" Line="4" Column="20" />
-      <File FileName="Assets\Scripts\Character\Turret.cs" Line="32" Column="6" />
-      <File FileName="Assets\Scripts\Projectile\Projectile.cs" Line="28" Column="29" />
+      <File FileName="Assets\Scripts\GUI\GUICompass.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\Powerups\Weapons\Weapon.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\Character\Turret.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\Projectile\Projectile.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\Character\PlayerCharacter.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\GUI\Menu.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\Character\NonplayerCharacter.cs" Line="664" Column="41" />
+      <File FileName="Assets\Scripts\LevelGen\MeshGenerator.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\LevelGen\Maze.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\PathFinding\CellGrid.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\WorldPerlinTest (Unused)\WorldGen.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\Character\CharacterBase.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\PathFinding\PathNode.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\PathFinding\PathNodeFromGrid.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\Powerups\Misc\Health.cs" Line="1" Column="1" />
+      <File FileName="Assets\Scripts\PathFinding\PathFinding.cs" Line="1" Column="1" />
     </Files>
   </MonoDevelop.Ide.Workbench>
   <MonoDevelop.Ide.DebuggingService.Breakpoints>
-    <BreakpointStore />
+    <BreakpointStore>
+      <Catchpoint exceptionName="System.IndexOutOfRangeException" />
+      <Catchpoint exceptionName="System.NullReferenceException" />
+    </BreakpointStore>
   </MonoDevelop.Ide.DebuggingService.Breakpoints>
   <MonoDevelop.Ide.DebuggingService.PinnedWatches />
 </Properties>

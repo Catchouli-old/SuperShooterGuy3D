@@ -24,6 +24,21 @@ public class Cell
 	{
 		Initialise(x, y);
 	}
+
+	public Cell(Cell oldCell)
+	{
+		deadend = oldCell.deadend;
+		door = oldCell.door;
+		end = oldCell.end;
+		generateFloor = oldCell.generateFloor;
+		gScore = oldCell.gScore;
+		key = oldCell.key;
+		next = oldCell.next;
+		overallScore = oldCell.overallScore;
+		parent = oldCell.parent;
+		position = oldCell.position;
+		visited = oldCell.visited;
+	}
 	
 	public Vector3 GetDirection(Cell other)
 	{

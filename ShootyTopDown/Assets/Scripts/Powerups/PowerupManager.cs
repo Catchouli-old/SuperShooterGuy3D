@@ -20,14 +20,14 @@ public class PowerupManager : MonoBehaviour
 	public LayerMask actors;
 
 	private CellGrid cellGrid;
-	private List<Cell> openSpaces;
+	private List<GridCell> openSpaces;
 
 	private List<Powerup> powerups;
 
-	public void SetOpenSpaces(CellGrid cellGrid, List<Cell> openSpaces)
+	public void SetOpenSpaces(CellGrid cellGrid, List<GridCell> openSpaces)
 	{
 		this.cellGrid = cellGrid;
-		this.openSpaces = new List<Cell>(openSpaces);
+		this.openSpaces = new List<GridCell>(openSpaces);
 		this.powerups = new List<Powerup>();
 	}
 
@@ -81,14 +81,21 @@ public class PowerupManager : MonoBehaviour
 		bool spawned = false;
 		for (int i = 0; i < MAX_ITERATIONS; ++i)
 		{
-			Cell cell = openSpaces[UnityEngine.Random.Range(0, openSpaces.Count)];
-			Vector3 worldPos = cellGrid.GetCellPos(new GridCell(cell.position.x, cell.position.y));
+			GridCell cell = openSpaces[UnityEngine.Random.Range(0, openSpaces.Count)];
+			Vector3 worldPos = cellGrid.GetCellPos(cell);
 			worldPos.z = 0;
 
 			if (!Physics.CheckSphere(worldPos, 0.1f, actors))
 			{
+				// Spawn powerup
+				GameObject powerup = (GameObject)GameObject.Instantiate(prefab, worldPos, Quaternion.identity);
+
+				// Get rid of the "cloned" text in its name
+				powerup.name = powerup.name.Substring(0, powerup.name.Length - 7);
+
 				spawned = true;
-				powerups.Add(((GameObject)GameObject.Instantiate(prefab, worldPos, Quaternion.identity)).GetComponent<Powerup>());
+				powerup.SetActive(true);
+				powerups.Add(powerup.GetComponent<Powerup>());
 				break;
 			}
 		}

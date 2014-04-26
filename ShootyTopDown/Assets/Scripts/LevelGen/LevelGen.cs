@@ -5,11 +5,13 @@ using System.Collections;
 [RequireComponent (typeof(Maze))]
 public class LevelGen : MonoBehaviour
 {
-	private int MAX_LIGHT_COUNT = 100;
+	public const int MAZE_RESOLUTION = 2;
+
+	private const int MAX_LIGHT_COUNT = 100;
 
 	public static LevelGen Instance { get { return instance; } }
 
-	public static CellGrid CellGrid { get { return new CellGrid(Grid, instance.transform); } }
+	public static CellGrid CellGrid { get { return new CellGrid(Grid, instance.transform, MAZE_RESOLUTION); } }
 	public static GridCell[,] Grid { get; set; }
 
 	private const float LIGHT_GEN_CHANCE = 0.5f;
@@ -27,11 +29,16 @@ public class LevelGen : MonoBehaviour
 	private GameObject lights;
 	private GameObject oldLights;
 
+	private List<GridCell> emptySpaces;
+
 	private Mesh mesh;
 
 	private GameObject enemies;
 
 	private List<Light> lightsPool;
+
+	private Cell[,] hiResGrid;
+	private CellGrid cellGrid;
 
 	public LevelGen()
 	{
@@ -55,33 +62,67 @@ public class LevelGen : MonoBehaviour
 		// Regenerate maze
 		maze.Regenerate();
 		
-		// Create cell grid for pathfinding
-		CellGrid cellGrid = new CellGrid(Grid, transform);
+		// Make the mesh seriously like 5x the resolution of the original maze for destructivity
+		hiResGrid = new Cell[maze.Grid.GetLength(0) * MAZE_RESOLUTION,
+		                             maze.Grid.GetLength(1) * MAZE_RESOLUTION];
 		
-		// Copy maze to pathfinding grid
-		Grid = new GridCell[maze.width, maze.height];
-		for (int x = 0; x < maze.width; ++x)
+		for (int x = 0; x < maze.Grid.GetLength(0); ++x)
 		{
-			for (int y = 0; y < maze.height; ++y)
+			for (int y = 0; y < maze.Grid.GetLength(1); ++y)
 			{
-				Grid[x, y] = new GridCell(x, y, maze.Grid[x, y].visited);
+				for (int ix = 0; ix < MAZE_RESOLUTION; ++ix)
+				{
+					for (int iy = 0; iy < MAZE_RESOLUTION; ++iy)
+					{
+						Cell oldCell = maze.Grid[x, y];
+						
+						int newX = x * MAZE_RESOLUTION + ix;
+						int newY = y * MAZE_RESOLUTION + iy;
+						
+						Cell newCell = new Cell(oldCell);
+						newCell.position = new Point(newX, newY);
+						
+						hiResGrid[newX, newY] = newCell;
+					}
+				}
 			}
 		}
+		
+		// Store a list of empty spaces
+		emptySpaces = new List<GridCell>();
+		
+		// Copy maze to pathfinding grid
+		int width = hiResGrid.GetLength(0);
+		int height = hiResGrid.GetLength(1);
+		Grid = new GridCell[width, height];
+		for (int x = 0; x < width; ++x)
+		{
+			for (int y = 0; y < height; ++y)
+			{
+				Grid[x, y] = new GridCell(x, y, hiResGrid[x, y].visited);
+
+				if (Grid[x, y].Accessible)
+					emptySpaces.Add(Grid[x, y]);
+			}
+		}
+		
+		// Create cell grid for pathfinding
+		cellGrid = CellGrid;
 
 		// Reset enemy pathfinding data
 		NonplayerCharacter.ResetPathfinding();
 		
-		// Get list of dead ends
-		List<Cell> deadEnds = new List<Cell>(maze.DeadEnds);
-		
+		// Get list of empty cells
+		List<GridCell> emptyCellsCopy = new List<GridCell>(emptySpaces);
+
 		// Pick random deadend for player
-		Cell playerSpawn = maze.DeadEnds[Random.Range(0, maze.DeadEnds.Count)];
+		GridCell playerSpawnCell = emptyCellsCopy[Random.Range(0, emptyCellsCopy.Count)];
 		
 		// Remove this dead end from the list so that no enemies can spawn there
-		deadEnds.Remove(playerSpawn);
+		emptyCellsCopy.Remove(playerSpawnCell);
 		
 		// Spawn the player there
-		Vector3 playerPos = cellGrid.GetCellPos(new GridCell(playerSpawn.position.x, playerSpawn.position.y));
+		Vector3 playerPos = cellGrid.GetCellPos(playerSpawnCell);
 		playerPos.z = 0;
 		
 		GameObject playerObj = ((Component)GameObject.FindObjectOfType(typeof(PlayerCharacter))).gameObject;
@@ -91,9 +132,10 @@ public class LevelGen : MonoBehaviour
 		enemies = new GameObject("Enemies");
 		for (int i = 0; i < enemyCount; ++i)
 		{
-			Cell deadEnd = deadEnds[Random.Range(0, deadEnds.Count)];
-			
-			Vector3 enemyPos = cellGrid.GetCellPos(new GridCell(deadEnd.position.x, deadEnd.position.y));
+			// Pick random place for enemy to spawn
+			GridCell enemySpawnCell = emptyCellsCopy[Random.Range(0, emptyCellsCopy.Count)];
+
+			Vector3 enemyPos = cellGrid.GetCellPos(enemySpawnCell);
 			enemyPos.z = 0;
 			
 			GameObject enemy = (GameObject)GameObject.Instantiate(enemyPrefab,
@@ -109,11 +151,11 @@ public class LevelGen : MonoBehaviour
 		
 		// Spawn powerups in maze
 		PowerupManager powerupManager = (PowerupManager)GameObject.FindObjectOfType(typeof(PowerupManager));
-		powerupManager.SetDeadEnds(cellGrid, deadEnds);
+		powerupManager.SetOpenSpaces(cellGrid, emptySpaces);
 		powerupManager.SpawnPowerups();
-		
+
 		// Create mesh for level
-		mesh = MeshGenerator.GenerateMesh(maze.Grid);
+		mesh = MeshGenerator.GenerateMesh(hiResGrid);
 		
 		// Asign mesh to mesh filter
 		GetComponent<MeshFilter>().mesh = mesh;
@@ -123,6 +165,28 @@ public class LevelGen : MonoBehaviour
 		if (wallLightPrefab != null)
 		{
 			CreateLights();
+		}
+	}
+
+	public void BreakWall(Vector3 point)
+	{
+		Point cell = cellGrid.GetIdxFromPos(point);
+		
+		int width = hiResGrid.GetLength(0);
+		int height = hiResGrid.GetLength(1);
+
+		if (cell.x >= 0 && cell.y >= 0 &&
+		    cell.x < width && cell.y < height)
+		{
+			hiResGrid[cell.x, cell.y].visited = true;
+
+			emptySpaces.Add(cellGrid.Grid[cell.x, cell.y]);
+
+			// Regenerate mesh
+			Destroy(mesh);
+			mesh = MeshGenerator.GenerateMesh(hiResGrid);
+			GetComponent<MeshFilter>().mesh = mesh;
+			GetComponent<MeshCollider>().sharedMesh = mesh;
 		}
 	}
 

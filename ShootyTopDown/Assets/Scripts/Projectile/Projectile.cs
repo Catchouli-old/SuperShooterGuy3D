@@ -4,9 +4,14 @@ using System.Collections;
 [RequireComponent (typeof(LineRenderer))]
 public class Projectile : MonoBehaviour
 {
+	public static float DamageMultiplier { get { return damageMultiplier; } set { damageMultiplier = value; } }
+
 	private const float DESTRUCTION_TIME = 5.0f;
 
 	private const float FADE_TIME = 0.4f;
+
+	// An empty layer - used temporarily for raycasts so that they avoid the current character
+	public LayerMask emptyLayer;
 
 	public GameObject shooter;
 	public float damage = 10.0f;
@@ -14,21 +19,26 @@ public class Projectile : MonoBehaviour
 
 	public LayerMask layersToHit;
 
-	private Vector3 startPos;
 	private LineRenderer lineRenderer;
 
 	private float creationTime;
 
 	private float distance = 1000.0f;
 
+	private static float damageMultiplier = 1.0f;
+
 	// Store initial position
 	protected void Start()
 	{
-		startPos = transform.position;
 		lineRenderer = GetComponent<LineRenderer>();
 		creationTime = Time.time;
 
-		// Raycast to get distance to hit
+		// Store shooter's old layermask
+		OldLayer oldLayer = shooter.AddComponent<OldLayer>();
+		oldLayer.oldlayer = shooter.layer;
+		oldLayer.ChangeObjectLayermask(emptyLayer);
+
+		// Raycast to check hit
 		RaycastHit hitInfo;
 		if (Physics.Raycast(transform.position, direction, out hitInfo, 1000.0f, layersToHit))
 		{
@@ -40,16 +50,31 @@ public class Projectile : MonoBehaviour
 			if (character != null)
 			{
 				// Do damage
-				character.Health -= damage;
+				character.Health -= damage * damageMultiplier;
+				if (character.Health < 0)
+					character.Health = 0;
 				character.DamageTaken();
 			}
+			// If this is a wall
+			else
+			{
+				Vector3 hitPoint = hitInfo.point;
+
+				// Sink hitpoint into wall a tiny bit
+				hitPoint -= hitInfo.normal * 0.001f;
+
+				((LevelGen)GameObject.FindObjectOfType(typeof(LevelGen))).BreakWall(hitPoint);
+			}
 		}
+
+		// Restore shooter's layermask
+		oldLayer.RestoreObjectLayer();
+		Destroy(oldLayer);
 	}
 
 	protected void Update()
 	{
-		// Update line renderer
-		lineRenderer.SetPosition(0, transform.position);
+		lineRenderer.SetPosition(0, transform.position + direction);
 		lineRenderer.SetPosition(1, transform.position + distance * direction);
 
 		// Calculate time since spawn

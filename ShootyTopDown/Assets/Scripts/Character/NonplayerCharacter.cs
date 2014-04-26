@@ -1,7 +1,8 @@
-﻿#define NPC_DEBUG
+#define NPC_DEBUG
 //#define DEBUG_FOV_RAYCASTS
 //#define DEBUG_PLAYER_RAYCASTS
 //#define DEBUG_COVER_RAYCASTS
+//#define FAST_MODE
 
 using UnityEngine;
 using System.Collections.Generic;
@@ -14,27 +15,35 @@ public class NonplayerCharacter
 	{
 		MAP_LEVEL,
 		PATROL_LEVEL,
-		CHASE_PLAYER,
-		LOOK_FOR_PLAYER,
-		COVER
+		ATTACK_PLAYER,
+		LOOK_FOR_PLAYER
 	}
-	
+
+	// Weapon firing speeds per second
+	private const float PISTOL_FIRE_RATE = 3;
+	private const float AUTOMATIC_FIRE_RATE = 1000.0f;	// The automatic can just be held down
+	private const float SHOTGUN_FIRE_RATE = 1;
+	private const float RAILGUN_FIRE_RATE = 1000.0f; // The railgun is super slow already!!
+
+	// Movement
 	private const float DEFAULT_MOVE_SPEED = 0.5f;
 
-	private const float COVER_HEALTH = 51;
-
-	public static CellState[,] CellStates { get { return cellStates; } }
-	public static GridCell[,] PathFindingGrid { get { return pathFindingGrid; } }
-
+	// Visibility
 	private const int FOV_STEPS = 30;
 	private const float FOV = 60.0f;
 
+	// Behaviour
 	private const float LOOK_PLAYER_JITTER = 15;
+	private const float PLAYER_PATH_REGEN_TIME = 1.0f;
+
+	public static CellState[,] CellStates { get { return cellStates; } }
+	public static GridCell[,] PathFindingGrid { get { return pathFindingGrid; } }
 	
 	public GameObject target;
 	
 	public LayerMask levelLayer;
 	public LayerMask playerLayer;
+	public LayerMask powerupLayer;
 	
 	private static CellGrid cellGrid;
 	private static GridCell[,] pathFindingGrid;
@@ -59,9 +68,9 @@ public class NonplayerCharacter
 	
 	private Vector3 lastPlayerPos;
 	private float lastPlayerTime;
-	
+
+	private bool gotPlayerPos;
 	private Vector3 playerPos;
-	private float playerTime;
 	
 	private PathNode currentNode;
 	private PathNode targetNode;
@@ -70,14 +79,20 @@ public class NonplayerCharacter
 
 	private List<Cell> deadEnds;
 
-	int lineVertices = 0;
+	private float lastTimePlayerPathCalculated = -PLAYER_PATH_REGEN_TIME;
+
+	private float lastTimeFired = -1000.0f;
+	private float currentWeaponFireRate = PISTOL_FIRE_RATE;
+
+	private int lineVertices = 0;
 
 	static NonplayerCharacter()
 	{
 		// Current pathfinding targets so that they don't pick the same ones
 		currentTargets = new List<PathNode>();
 	}
-		
+
+	// Used to reset the pathfinding when the level is regenerated
 	public static void ResetPathfinding()
 	{		
 		gridWidth = LevelGen.CellGrid.Width;
@@ -101,7 +116,7 @@ public class NonplayerCharacter
 			pathFindingGrid[x, y] = new GridCell(x, y, false);
 		}
 		
-		cellGrid = new CellGrid(pathFindingGrid, LevelGen.Instance.transform, 1);
+		cellGrid = new CellGrid(pathFindingGrid, LevelGen.Instance.transform, LevelGen.MAZE_RESOLUTION);
 		
 		currentTargets.Clear();
 	}
@@ -109,14 +124,17 @@ public class NonplayerCharacter
 	// Damage taken event handler
 	public override void DamageTaken()
 	{
+		base.DamageTaken();
+
 		// Look for player if damage taken and player position unknown
-		if (currentState != State.CHASE_PLAYER)
+		if (currentState != State.ATTACK_PLAYER)
 		{
 			SwitchState(State.LOOK_FOR_PLAYER);
 			currentPath = null;
 		}
 	}
-	
+
+	// Initialise some agent-specific pathfinding stuff
 	protected override void Start()
 	{
 		// Run base start method
@@ -141,18 +159,60 @@ public class NonplayerCharacter
 		lineRenderer.SetWidth(0.1f, 0.1f);
 #endif
 	}
-	
+
+	// Fire weapon - called by state handlers
+	protected override void Fire()
+	{
+		if (currentWeaponFireRate <= 0)
+			return;
+
+		float currentWeaponFireMinTime = 1.0f / currentWeaponFireRate;
+
+		if (Time.time - lastTimeFired >= currentWeaponFireMinTime)
+		{
+			// Fire weapon
+			base.Fire();
+
+			lastTimeFired = Time.time;
+		}
+	}
+
+	// Update min weapon time when weapon is switched
+	public override void SwitchedWeapon()
+	{
+		switch (CurrentWeapon)
+		{
+		case WeaponType.PISTOL:
+			currentWeaponFireRate = PISTOL_FIRE_RATE;
+			break;
+		case WeaponType.AUTOMATIC:
+			currentWeaponFireRate = AUTOMATIC_FIRE_RATE;
+			break;
+		case WeaponType.SHOTGUN:
+			currentWeaponFireRate = SHOTGUN_FIRE_RATE;
+			break;
+		case WeaponType.RAILGUN:
+			currentWeaponFireRate = RAILGUN_FIRE_RATE;
+			break;
+		}
+	}
+
+	// Called to switch current state
 	protected void SwitchState(State newState)
 	{
-		previousState = currentState;
-		currentState = newState;
-		stateJustChanged = true;
-		stateStartTime = Time.time;
+		if (newState != currentState)
+		{
+			previousState = currentState;
+			currentState = newState;
+			stateJustChanged = true;
+			stateStartTime = Time.time;
+		}
 	}
-	
+
+	// Handle states and pathfinding
 	protected override void Update()
 	{
-		//Debug.Log("Current state: " + currentState);
+		Debug.Log("Current state: " + currentState);
 
 		lineVertices = 0;
 
@@ -160,12 +220,23 @@ public class NonplayerCharacter
 		base.Update();
 		
 		// Get current node
-		currentNode =
-			cellGrid.GetPathfindingNode(cellGrid.GetCellAtPos(transform.position));
+		GridCell currentCell = cellGrid.GetCellAtPos(transform.position);
+		PathNode oldNode = currentNode;
+		currentNode = cellGrid.GetPathfindingNode(currentCell);
 
 		// Common update stuff
 		// Do visibility testing
 		TestVisibility();
+
+		// Look for powerups and collect them if we can see them
+		Vector3 powerupPos;
+		if (CanSeeObjectOnLayer(FacingDirection, powerupLayer, "Powerup", out powerupPos))
+		{
+			Vector3 dir = (powerupPos - transform.position).normalized;
+
+			Move(dir);
+			TurnTowards(dir);
+		}
 
 		// Set default movement speed (later gets replaced in state handlers)
 		targetMovementSpeed = DEFAULT_MOVE_SPEED;
@@ -189,18 +260,11 @@ public class NonplayerCharacter
 			break;
 			
 			
-		case State.CHASE_PLAYER:
+		case State.ATTACK_PLAYER:
 			
-			if (!ChasePlayer())
+			if (!AttackPlayer())
 				return;
 			
-			break;
-
-		case State.COVER:
-
-			if (!TakeCover())
-				return;
-
 			break;
 			
 		case State.LOOK_FOR_PLAYER:
@@ -269,9 +333,9 @@ public class NonplayerCharacter
 		TurnTowards(movementDir);
 
 		// Check if we can see the player and switch to chase player if so
-		if (CanSeePlayer(FacingDirection))
+		if (CanSeeObjectOnLayer(FacingDirection, playerLayer, "Player"))
 		{
-			SwitchState(State.CHASE_PLAYER);
+			SwitchState(State.ATTACK_PLAYER);
 			currentPath = null;
 			return false;
 		}
@@ -346,9 +410,9 @@ public class NonplayerCharacter
 		TurnTowards(movementDir);
 
 		// Check if we can see the player and switch to chase player if so
-		if (CanSeePlayer(FacingDirection))
+		if (CanSeeObjectOnLayer(FacingDirection, playerLayer, "Player"))
 		{
-			SwitchState(State.CHASE_PLAYER);
+			SwitchState(State.ATTACK_PLAYER);
 			currentPath = null;
 			return false;
 		}
@@ -359,75 +423,36 @@ public class NonplayerCharacter
 				targetNode = null;
 		}
 
-		if (targetNode == null)
+		if (currentPath == null)
 		{
 			// Find a random walkable tile to path find to
-			Cell cell = deadEnds[Random.Range(0, deadEnds.Count)];
+			GridCell gridCell = cellGrid.Grid[0, 0];
+
+			int i = 0;
+			const int max_iter = 5;
+			while (!gridCell.Accessible)
+			{
+				if (i >= max_iter)
+					break;
+
+				int x = Random.Range(0, cellGrid.Width);
+				int y = Random.Range(0, cellGrid.Height);
+
+				gridCell = cellGrid.Grid[x, y];
+				targetNode = cellGrid.GetPathfindingNode(gridCell);
+
+				i++;
+			}
 			
-			GridCell gridCell = cellGrid.Grid[cell.position.x, cell.position.y];
-
-			targetNode = cellGrid.GetPathfindingNode(gridCell);
+			// Pathfind to cell
+			currentPath = PathFinding.FindPath(currentNode, targetNode);
 		}
-		
-		// Pathfind to cell
-		currentPath = PathFinding.FindPath(currentNode, targetNode);
-
-		return true;
-	}
-		
-	protected bool ChasePlayer()
-	{
-		// Choose chase player/take cover based on health
-		if (Health < COVER_HEALTH)
-		{
-			SwitchState(State.COVER);
-			return false;
-		}
-
-		// FULL SPEED AHEAD
-		targetMovementSpeed = 1.0f;
-
-		// Look for player towards the last known position
-		// Calculate intercept vector
-		Vector3 dir = (playerPos - transform.position).normalized;
-
-		// If we can't see the player, go to their last known pos
-		if (!CanSeePlayer(dir))
-		{
-			SwitchState(State.LOOK_FOR_PLAYER);
-			currentPath = null;
-			return false;
-		}
-
-		// Path find to player
-		List<PathNode> newPath = PathFinding.FindPath(currentNode,
-		                                              cellGrid.GetPathfindingNode(cellGrid.GetCellAtPos(lastPlayerPos)));
-		
-		if (newPath.Count != 0)
-			currentPath = newPath;
-
-		// Turn towards new player position
-		// Calculate intercept vector
-		dir = Quaternion.AngleAxis(Random.Range(-0.5f, 0.5f) * LOOK_PLAYER_JITTER, Vector3.forward) *
-		                           (playerPos - transform.position).normalized;
-		
-		// Turn towards the estimated target location and fire
-		TurnTowards(dir);
-
-		// Fire at player
-		Fire();
 
 		return true;
 	}
 	
-	protected bool TakeCover()
+	protected bool AttackPlayer()
 	{
-		// Choose chase player/take cover based on health
-		if (Health > COVER_HEALTH)
-		{
-			SwitchState(State.CHASE_PLAYER);
-		}
-
 		// FULL SPEED AHEAD
 		targetMovementSpeed = 1.0f;
 		
@@ -435,35 +460,50 @@ public class NonplayerCharacter
 		// Calculate intercept vector
 		Vector3 dir = (playerPos - transform.position).normalized;
 		
-		// If we can't see the player, go to their last known pos
-		if (CanSeePlayer(dir))
+		// Find nearest cell with cover from player
+		PathNode coverNode;
+		Vector3 coverPos;
+		if (currentPath == null)
+		{
+			if (FindCover(out coverNode, out coverPos))
+			{
+				// Get node position
+				Vector3 nodePos = cellGrid.GetCellPos(
+					cellGrid.Grid[(int)coverNode.Position.x, (int)coverNode.Position.y]);
+
+				// Path find to cover (or just the farthest away node if we didn't find cover)
+				currentPath = PathFinding.FindPath(currentNode, coverNode);
+
+				// If the path length is 1 (we're already on the cell), move towards hidePos
+				if (currentPath.Count == 1)
+				{
+					Move((coverPos - transform.position));
+				}
+			}
+			// If we couldn't find any cover, just run away
+			else
+			{
+				Move(-dir);
+			}
+		}
+		
+		// If we can see the player, shoot at it
+		if (CanSeeObjectOnLayer(dir, playerLayer, "Player"))
 		{
 			dir = Quaternion.AngleAxis(Random.Range(-0.5f, 0.5f) * LOOK_PLAYER_JITTER, Vector3.forward) *
 				(playerPos - transform.position).normalized;
 			
 			TurnTowards(dir);
-			Fire();
-			
-			// Find nearest cell with cover from player
-			PathNode coverNode;
-			if (FindCover(out coverNode))
-			{
-				// Path find to cover (or just the farthest away node if we didn't find cover)
-				currentPath = PathFinding.FindPath(currentNode, coverNode);
-			}
+
+			// Shoot once we're facing the right direction
+			if (Vector3.Angle(dir, FacingDirection) < 1.0f)
+				Fire();
 		}
+		// Otherwise, look for it
 		else
 		{
-			// Look in last known player direction and look backwards and forwards
-			const float ROTATE_PERIOD = 1;
-			float dt = Time.time - stateStartTime;
-			float coef = dt % ROTATE_PERIOD / (0.5f * ROTATE_PERIOD);
-			if (coef > 1.0f)
-				coef = 1.0f - coef;
-
-			Vector3 lastPlayerDir = (playerPos - transform.position).normalized;
-
-			TurnTowards(Quaternion.AngleAxis(60 * coef, Vector3.forward) * (playerPos - transform.position).normalized);
+			SwitchState(State.LOOK_FOR_PLAYER);
+			return false;
 		}
 		
 		return true;
@@ -483,9 +523,9 @@ public class NonplayerCharacter
 		float dt = Time.time - stateStartTime;
 		
 		// Check if we can see the player and switch to chase player if so
-		if (CanSeePlayer(FacingDirection))
+		if (CanSeeObjectOnLayer(FacingDirection, playerLayer, "Player"))
 		{
-			SwitchState(State.CHASE_PLAYER);
+			SwitchState(State.ATTACK_PLAYER);
 			currentPath = null;
 			return false;
 		}
@@ -494,24 +534,35 @@ public class NonplayerCharacter
 		PathNode lastPlayerNode = cellGrid.GetPathfindingNode(cellGrid.GetCellAtPos(playerPos));
 		
 		// Move to player's last known location if not there
-		if (!currentNode.Equals(lastPlayerNode))
+		if (gotPlayerPos)
 		{
-			// Otherwise, pathfind to the last known position
-			List<PathNode> newPath = PathFinding.FindPath(currentNode,
-			                                              cellGrid.GetPathfindingNode(cellGrid.GetCellAtPos(playerPos)));
-			
-			// If we couldn't find a path there, look for the player at our current location
-			if (newPath.Count != 0)
+			if (!currentNode.Equals(lastPlayerNode) && currentPath == null)
 			{
-				currentPath = newPath;
-			}
-			else
-			{
-				lastPlayerNode = currentNode;
+				if (Time.time - lastTimePlayerPathCalculated > PLAYER_PATH_REGEN_TIME)
+				{
+					lastTimePlayerPathCalculated = Time.time;
+
+					// Otherwise, pathfind to the last known position
+					List<PathNode> newPath = PathFinding.FindPath(currentNode,
+					                                              cellGrid.GetPathfindingNode(cellGrid.GetCellAtPos(playerPos)));
+					
+					// If we couldn't find a path there, look for the player at our current location
+					if (newPath.Count != 0)
+					{
+						currentPath = newPath;
+					}
+					else
+					{
+						// If there's no way to get to the player from our current location,
+						// Keep patroling the maze
+						SwitchState(State.MAP_LEVEL);
+						return false;
+					}
+				}
 			}
 		}
 
-		if (currentNode.Equals(lastPlayerNode))
+		if (currentNode.Equals(lastPlayerNode) || !gotPlayerPos)
 		{
 			// Only look for MAX_ITME_LOOKING seconds and then go back to normal activity
 			if (dt > MAX_TIME_LOOKING)
@@ -539,7 +590,13 @@ public class NonplayerCharacter
 		return true;
 	}
 	
-	protected bool CanSeePlayer(Vector2 dir)
+	protected bool CanSeeObjectOnLayer(Vector2 dir, LayerMask layer, string tag)
+	{
+		Vector3 pos;
+		return CanSeeObjectOnLayer(dir, layer, tag, out pos);
+	}
+		
+	protected bool CanSeeObjectOnLayer(Vector2 dir, LayerMask layer, string tag, out Vector3 objectPosition)
 	{
 		// Raycast to walls
 		Vector3 startDir = Quaternion.AngleAxis(-0.5f * FOV, Vector3.forward) * dir;
@@ -549,55 +606,67 @@ public class NonplayerCharacter
 		{
 			Vector3 direction = Vector3.Lerp(startDir, endDir, (float)i * (1.0f / FOV_STEPS)).normalized;
 			
-#if NPC_DEBUG && DEBUG_PLAYER_RAYCASTS
+			#if NPC_DEBUG && DEBUG_PLAYER_RAYCASTS
 			lineRenderer.SetVertexCount(i*3+3);
 			lineRenderer.SetPosition(i*3 + 0, transform.position);
 			lineRenderer.SetPosition(i*3 + 1, transform.position + direction * 1000.0f);
 			lineRenderer.SetPosition(i*3 + 2, transform.position);
-#endif
+			#endif
 			
 			Ray ray = new Ray(transform.position, direction);
 			
 			RaycastHit hitInfo;
-			if (Physics.Raycast(ray, out hitInfo, 1000.0f, playerLayer))
+			if (Physics.Raycast(ray, out hitInfo, 1000.0f, layer))
 			{
-				if (hitInfo.collider.tag == "Player")
+				if (tag.Equals(hitInfo.collider.tag))
 				{
 					lastPlayerPos = playerPos;
-					lastPlayerTime = playerTime;
 					
+					gotPlayerPos = true;
 					playerPos = hitInfo.collider.transform.position;
-					playerTime = Time.deltaTime;
-
+					
 					// Send message to all other NPCs
-					foreach (Component npc in (Component[])GameObject.
+					foreach (NonplayerCharacter npc in (NonplayerCharacter[])GameObject.
 					         FindObjectsOfType(typeof(NonplayerCharacter)))
 					{
-						npc.SendMessage("SawPlayer", playerPos);
+						npc.SawPlayer(playerPos);
 					}
+
+					objectPosition = hitInfo.collider.transform.position;
 					
 					return true;
 				}
 			}
 		}
-		
+
+		objectPosition = Vector3.zero;
+
 		return false;
 	}
 
 	// Listen for messages from other NPCs
 	protected void SawPlayer(Vector3 pos)
 	{
-		playerPos = pos;
+		if (currentNode == null)
+			return;
 
-		// Try and generate a path to the player
-		List<PathNode> newPath = PathFinding.FindPath(currentNode,
-		                                              cellGrid.GetPathfindingNode(cellGrid.GetCellAtPos(playerPos)));
-
-		// If we succeeded in generating a path & we aren't currently chasing the player
-		// Switch to going to find the player
-		if (newPath.Count > 0 && currentState != State.CHASE_PLAYER && currentState != State.COVER)
+		if (currentState == State.PATROL_LEVEL ||
+		    currentState == State.MAP_LEVEL)
 		{
-			SwitchState(State.LOOK_FOR_PLAYER);
+			playerPos = pos;
+			gotPlayerPos = true;
+
+			// Try and generate a path to the player
+			List<PathNode> newPath = PathFinding.FindPath(currentNode,
+			                                              cellGrid.GetPathfindingNode(cellGrid.GetCellAtPos(playerPos)));
+
+			// If we succeeded in generating a path & we aren't currently chasing the player
+			// Switch to going to find the player
+			if (newPath.Count != 0)
+			{
+				currentPath = newPath;
+				SwitchState(State.LOOK_FOR_PLAYER);
+			}
 		}
 	}
 	
@@ -619,6 +688,9 @@ public class NonplayerCharacter
 			lineRenderer.SetPosition(i*3 + 2, transform.position);
 #endif
 			
+			int width = cellStates.GetLength(0);
+			int height = cellStates.GetLength(1);
+			
 			RaycastHit hitInfo;
 			if (Physics.Raycast(ray, out hitInfo, 1000.0f, levelLayer))
 			{
@@ -626,7 +698,14 @@ public class NonplayerCharacter
 				{
 					Vector3 hitCellWorld = hitInfo.point - hitInfo.normal * 0.5f;
 					
-					GridCell hitCell = LevelGen.CellGrid.GetCellAtPos(hitCellWorld);
+					Point hitCell = LevelGen.CellGrid.GetIdxFromPos(hitCellWorld);
+					
+					if (hitCell.x < 0 || hitCell.y < 0 ||
+					    hitCell.x >= width || hitCell.y >= height)
+					{
+						continue;
+					}
+
 					int hitX = hitCell.x;
 					int hitY = hitCell.y;
 					
@@ -655,14 +734,19 @@ public class NonplayerCharacter
 						// Make this more mathematically precise
 						Vector3 pos = curPos + direction2D * ((float)j - 0.5f);
 						
-						GridCell posCell = LevelGen.CellGrid.GetCellAtPos(pos);
-						int posX = posCell.x;
-						int posY = posCell.y;
-						
-						if (posX != hitX && posY != hitY)
+						Point posCell = LevelGen.CellGrid.GetIdxFromPos(pos);
+
+						if (posCell.x >= 0 && posCell.y >= 0 &&
+						    posCell.x < width && posCell.y < height)
 						{
-							cellStates[posX, posY] = CellState.CLEAR;
-							pathFindingGrid[posX, posY].Accessible = true;
+							int posX = posCell.x;
+							int posY = posCell.y;
+							
+							if (posX != hitX && posY != hitY)
+							{
+								cellStates[posX, posY] = CellState.CLEAR;
+								pathFindingGrid[posX, posY].Accessible = true;
+							}
 						}
 					}
 				}
@@ -736,6 +820,12 @@ public class NonplayerCharacter
 					{
 						end = parent;
 						endScore = parent.GScore;
+
+						// End search if in fast mode (this will give us an
+						// unknown, but not necessarily the closest one)
+#if FAST_NODE
+						goto end_search;
+#endif
 					}
 				}
 				
@@ -778,6 +868,10 @@ public class NonplayerCharacter
 				}
 			}
 		}
+
+#if FAST_NODE
+	end_search:
+#endif
 		
 		// Return an empty path if we couldn't find the end
 		if (end == null)
@@ -799,13 +893,12 @@ public class NonplayerCharacter
 		return path;
 	}
 
-	protected bool FindCover(out PathNode outNode)
+	protected bool FindCover(out PathNode outNode, out Vector3 outPos)
 	{
+		const float STEP_OUT_DIST = 0.1f;
+
 		List<PathNode> open = new List<PathNode>();
 		List<PathNode> closed = new List<PathNode>();
-
-		float farthestDistance = 0;
-		PathNode farthestAwayNode = currentNode;
 
 		open.Add(currentNode);
 
@@ -817,25 +910,18 @@ public class NonplayerCharacter
 			open.Remove(next);
 			closed.Add(next);
 
-			// Update farthest node if this is further
-			float distFromStart = (currentNode.Position - next.Position).magnitude;
-			if (distFromStart > farthestDistance)
-			{
-				farthestDistance = distFromStart;
-				farthestAwayNode = next;
-			}
-
 			// Check if this node provides cover
 			Vector3 nodePos = cellGrid.GetCellPos(
 				cellGrid.Grid[(int)next.Position.x, (int)next.Position.y]);
+			nodePos += Vector3.back;
 
 			// Get extremities in player direction
 			Vector3 playerDir = (transform.position - playerPos).normalized;
-			Vector3 perpendicularDir = (Quaternion.AngleAxis(90, Vector3.forward) * playerDir).normalized;
+			Vector3 perpendicularDir = Quaternion.AngleAxis(90, Vector3.forward) * playerDir;
 
 			Vector3[] extremities = new Vector3[2];
-			extremities[0] = nodePos + perpendicularDir * ((CapsuleCollider)collider).radius + Vector3.back;
-			extremities[1] = nodePos - perpendicularDir * ((CapsuleCollider)collider).radius + Vector3.back;
+			extremities[0] = nodePos + perpendicularDir * ((CapsuleCollider)collider).radius;
+			extremities[1] = nodePos - perpendicularDir * ((CapsuleCollider)collider).radius;
 
 			foreach (Vector3 extremity in extremities)
 			{
@@ -853,11 +939,75 @@ public class NonplayerCharacter
 #endif
 
 				// Raycast from player to extremity and see if we hit a wall
-				if (Physics.Raycast(playerPos, dir, dist, levelLayer))
+				RaycastHit hitInfo;
+				if (Physics.Raycast(playerPos, dir, out hitInfo, dist, levelLayer))
 				{
-					// We hit a wall, this node provides cover
-					outNode = next;
-					return true;
+					Vector3 nodeSize = LevelGen.Instance.transform.lossyScale;
+					nodeSize.z = 0;
+					
+					// Find node corners
+					Vector3[] nodeCorners =
+					{
+						nodePos + new Vector3( nodeSize.x, 0, 0),
+						nodePos + new Vector3(-nodeSize.x, 0, 0),
+						nodePos + new Vector3(0,  nodeSize.y, 0),
+						nodePos + new Vector3(0, -nodeSize.y, 0)
+					};
+					
+					// Get nearest corner to player
+					float closestSqrDist = (playerPos - nodeCorners[0]).sqrMagnitude;
+					Vector3 closestCorner = nodeCorners[0];
+					foreach (Vector3 corner in nodeCorners)
+					{
+						float sqrDist = (playerPos - corner).magnitude;
+						
+						if (sqrDist < closestSqrDist)
+						{
+							closestSqrDist = sqrDist;
+							closestCorner = corner;
+						}
+					}
+					
+					Vector3 hidePos = nodePos;
+					PathNode hideNode = null;
+					
+					for (int i = 0; i < 4; ++i)
+					{
+						// Hide behind the closest corner
+						Vector3 hideDir = (closestCorner - playerPos).normalized;
+						hidePos = closestCorner + hideDir;
+
+						// Slide out until we can shoot the player
+						Vector3 perpendicular = Quaternion.AngleAxis(90, Vector3.forward) * hideDir;
+
+						float[] directions = { -1.0f, 1.0f };
+						foreach (float direction in directions)
+						{
+							Vector3 steppedOutPos = hidePos + perpendicular * direction * STEP_OUT_DIST;
+							float steppedOutDist = (playerPos - steppedOutPos).magnitude;
+							Vector3 steppedOutDir = (playerPos - steppedOutPos) / steppedOutDist;
+							
+							Debug.DrawLine(playerPos, steppedOutPos);
+
+							if (!Physics.Raycast(playerPos, (steppedOutPos - playerPos).normalized, steppedOutDist))
+							{
+								hidePos = steppedOutPos;
+								break;
+							}
+						}
+						
+						// Path find to the node this is on (this might be different to the node we started with)
+						GridCell hideCell = cellGrid.GetCellAtPos(hidePos);
+						hideNode = cellGrid.GetPathfindingNode(hideCell);
+						
+						if (hideNode.Accessible)
+						{
+							outNode = next;
+							outPos = hidePos;
+
+							return true;
+						}
+					}
 				}
 			}
 
@@ -869,7 +1019,10 @@ public class NonplayerCharacter
 			}
 		}
 
-		outNode = farthestAwayNode;
+		outNode = currentNode;
+		outPos = cellGrid.GetCellPos(
+			cellGrid.Grid[(int)currentNode.Position.x, (int)currentNode.Position.y]);
+
 		return false;
 	}
 }

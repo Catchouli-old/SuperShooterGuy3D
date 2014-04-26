@@ -42,24 +42,19 @@ public class Maze
 	
 	public Cell[,] Grid { get { return grid; } }
 	
+	public List<Cell> DeadEnds { get { return deadends; } }
+	public List<Cell> OpenCells { get { return opencells; } }
+	
 	public bool autoPlay = false;
 	
 	private Cell[,] grid;
 	
 	private List<Cell> deadends;
-
+	private List<Cell> opencells;
 	
 	private Mesh mesh;
 	
 	private System.Random generator;
-	
-	public List<Cell> DeadEnds
-	{
-		get
-		{
-			return deadends;
-		}
-	}
 
 	public void Start()
 	{
@@ -90,6 +85,7 @@ public class Maze
 		// Stuff
 		grid = new Cell[width, height];
 		deadends = new List<Cell>();
+		opencells = new List<Cell>();
 		
 		for (int y = 0; y < height; ++y)
 		{
@@ -125,6 +121,15 @@ public class Maze
 						break;
 					}
 				}
+			}
+		}
+
+		// Add cells to open list
+		foreach (Cell cell in Grid)
+		{
+			if (cell.visited)
+			{
+				OpenCells.Add(cell);
 			}
 		}
 	}

@@ -47,8 +47,11 @@ public class PlayerCharacter
 		TurnTowards(mouseDir);
 
 		// Fire
-		if ((fire && CurrentWeapon != WeaponType.AUTOMATIC) ||
-		    (fireHeld && CurrentWeapon == WeaponType.AUTOMATIC))
+		bool automaticWeapon = CurrentWeapon == WeaponType.AUTOMATIC ||
+								CurrentWeapon == WeaponType.PISTOL;
+
+		if ((fire && !automaticWeapon) ||
+		    (fireHeld && automaticWeapon))
 			Fire();
 
 		// Update old button states
