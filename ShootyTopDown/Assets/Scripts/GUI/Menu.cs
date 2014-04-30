@@ -55,6 +55,7 @@ public class Menu : MonoBehaviour
 	
 	private float enemyCount = 5;
 	private float mazeDimensions = 15;
+	private bool damageOn = true;
 	private bool generateLoops = true;
 
 	private bool clicked = false;
@@ -394,20 +395,36 @@ public class Menu : MonoBehaviour
 		}
 		
 		GUILayout.EndHorizontal();
-
+		
 		GUILayout.Space(10);
 		
 		GUILayout.BeginHorizontal();
-
+		
 		GUILayout.Label("Generate loops: ", new GUILayoutOption[] { GUILayout.Width(100) });
-
+		
 		generateLoops = GUILayout.Toggle(generateLoops, "");
-
+		
 		// Update value
 		if (generateLoops)
 			maze.generationMode = Maze.Mode.CREATELOOPS;
 		else
 			maze.generationMode = Maze.Mode.PERFECT;
+		
+		GUILayout.EndHorizontal();
+		
+		GUILayout.Space(10);
+		
+		GUILayout.BeginHorizontal();
+		
+		GUILayout.Label("Damage on: ", new GUILayoutOption[] { GUILayout.Width(100) });
+		
+		damageOn = GUILayout.Toggle(damageOn, "");
+		
+		// Update value
+		if (damageOn)
+			Projectile.DamageMultiplier = 1.0f;
+		else
+			Projectile.DamageMultiplier = 0.0f;
 		
 		GUILayout.EndHorizontal();
 		

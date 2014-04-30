@@ -230,6 +230,7 @@ public class NonplayerCharacter
 
 		// Look for powerups and collect them if we can see them
 		Vector3 powerupPos;
+		if (currentState != State.ATTACK_PLAYER && currentState != State.LOOK_FOR_PLAYER)
 		if (CanSeeObjectOnLayer(FacingDirection, powerupLayer, "Powerup", out powerupPos))
 		{
 			Vector3 dir = (powerupPos - transform.position).normalized;
